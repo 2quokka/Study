@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 #define MAXSIZE 128
 

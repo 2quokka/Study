@@ -2,6 +2,7 @@
 #include <sys/wait.h>
 //#define DEBUG
 
+void signal_handler(int sig);
 int main(void){
 
     int msg_id, c_pid, pfd, size=0;
@@ -19,10 +20,9 @@ int main(void){
         perror("[SERVER] : msgget():");
         exit(2);
     }
-    printf("msg id = %d \n", msg_id);
 
     while(1){
-
+        memset( (char *)&msg_buf, 0x00, sizeof(MSG_BUF)); //
         if ((size = msgrcv(msg_id, &msg_buf, MAXSIZE, SERVER_TYPE, 0)) == -1) {
             perror("[SERVER] : msgrcv(): ");
             break;
@@ -72,3 +72,4 @@ int main(void){
     msgctl(msg_id, IPC_RMID, 0); //delete message queue
     return 0;
 }
+

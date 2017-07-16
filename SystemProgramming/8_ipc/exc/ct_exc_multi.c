@@ -22,17 +22,20 @@ int main(void){
     sprintf(pname,"%s/%s", PATH_NAME, pid);
 
     while(1){
+        memset(exc_file, 0x00, sizeof(exc_file));//
+
         if((size = read( 0, exc_file, MAXSIZE)) < 0 ){
             perror("read() : ");
             break;
         }
 
+        exc_file[size-1] = '\0'; //
+        sprintf(msg_buf.mdata, "%s:%s", pid, exc_file);//
+
         if(strncmp(exc_file, "end", 3) == 0){
             msgsnd(msg_id, &msg_buf, strlen(msg_buf.mdata)+1, 0);
             break;
         }
-
-        sprintf(msg_buf.mdata, "%s:%s", pid, exc_file);
 
         msg_buf.mtype = SERVER_TYPE;
 

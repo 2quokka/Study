@@ -18,11 +18,11 @@ int main(int argc, char *argv[]) {
     }
 
     memset(&book, 0x00, sizeof(BOOK_SALES));
-    memcpy(book.bookname, argv[1], strlen(argv[1]));
-    book.bookname[ strlen(argv[1]) ] = 0;
+    memcpy(book.bookname, argv[1], strlen(argv[1])); // bookname init
+    book.bookname[ strlen(argv[1]) ] = 0; // strcpy
     book.left_stock = 20;
 
-    if( (shm_id = init_shm(shm_ptr)) < 0 ) {
+    if( (shm_id = init_shm()) < 0 ) {
         perror(argv[0]);
         remove_ipcs();
         exit(3);
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
     }
 
     sales_start();
-    remove_ipcs(shm_id, sem_id, shm_ptr);
+    remove_ipcs();
     printf("%s's sales is complished \n", argv[0]);
 
     return 0;
@@ -67,7 +67,7 @@ void sales_start(){
 
     memcpy(shm_ptr, (char *)&book, sizeof(BOOK_SALES));
     sprintf(sem_buf, "%d", sem_id);
-    sprintf(sem_buf, "%d", shm_id);
+    sprintf(shm_buf, "%d", shm_id);
 
     for( i=0; i<CHILD_NUM; i++ ) {
         if ( (pid = fork()) == -1 ) {

@@ -22,13 +22,13 @@ void main(int argc, char *argv[])
 		exit(1);
 	}
 
-	memcpy(p_name, argv[0], strlen(argv[0]));
+	memcpy(p_name, argv[0], strlen(argv[0])); // bookstore_n
 	p_name[strlen(argv[0])]=0;
 
 	sscanf(argv[1],"%d", &shm_id);
 	sscanf(argv[2],"%d", &sem_id);
 
-	if(init_shm() < 0)
+	if(init_shm() < 0) // share memory attach
 	{
 		perror(argv[0]);
 		exit(2);
@@ -73,7 +73,9 @@ void sales_book(char *store_name)
 			break;
 		}
 
-		if(!book->left_stock)
+        //critical section 
+
+		if(!book->left_stock) //left_stock == 0
 		{
 			printf("[%s] : no book left\n",store_name);
 			empty++;
@@ -87,13 +89,14 @@ void sales_book(char *store_name)
 			book->left_stock--;
 			printf("[%s]%s : book stock : %d EA\n",store_name,book->sale_date, book->left_stock);
 		}
-
+        ////////////////////////////////////////////
 		if(semaphore_up(sem_id) < 0 )
 		{
 			perror("semaphore_up : ");
 			break;
 		}
 		sleep(((unsigned)rand() % 10) + 1);
+
 	} // end of while
 }
 
