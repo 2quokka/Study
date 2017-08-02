@@ -1,122 +1,125 @@
-// header file
-#include <stdio.h>
-#include <string.h> // strlen ..
-#include <sys/types.h> //fork ...
-#include <unistd.h>  // fork.. exec.. 
-#include <stdlib.h>
-#include <fcntl.h>
-#include <sys/wait.h> //wait..
-#include <signal.h>
-
+#include "myShell.h"
 #define DEBUG
-#define COMMAND_BUFFER 1024
-#define MAX_PATH 256
-#define MAX_TOKEN 256
-
-//type
-#define BG 1
-#define RD_R 2
-#define RD_L 4
-
-//function
-int run(char *command);
-int accessCheck(char **command_path, char* filename);
-int setpath(char **path, char **cTok);
-int initPath(char **path);
-int tokenize(char *command, char *cToken[MAX_TOKEN][MAX_TOKEN]);
-int specialCommand(char **cTok);
-
-char *dir_path[MAX_PATH];
-char *cToken[MAX_TOKEN][MAX_TOKEN];//3 matrix 
-unsigned char state[MAX_TOKEN];
 
 int main(int argc, char **argv){
     char command[COMMAND_BUFFER];
 
     initPath(dir_path);
 
-    signal(SIGINT, SIG_IGN);
-    signal(SIGQUIT, SIG_IGN);
+//    signal(SIGINT, SIG_IGN);
+//    signal(SIGQUIT, SIG_IGN);
 
     while(1){
-        fputs("% ",stdout); //% print
-        fgets(command, COMMAND_BUFFER -1, stdin); // input command for user
+        write(1, "% ", 2);
+        memset(command, 0, COMMAND_BUFFER);
+        read(0, command, COMMAND_BUFFER-1);
         command[strlen(command)-1] = '\0'; // delete \n
 
 #ifdef DEBUG
         printf("command : %s \n", command);
 #endif
-        
+        memset(cmdList, 0x00, sizeof(COMMAND) * MAX_COMMAND);
         run(command); //run return value handle!!!!
+        
     }
 
     return 0;
 }
 
-int run(char *command){//{{{
-    int pid;
-    int cmd_count, n;
-    char *cToken[MAX_TOKEN][MAX_TOKEN];
-    char file_path[128];
+int run(char *command)//{{{
+{
+    int cmd_count, n, pid, pd[2], rpd[2];
+    int in, out, next_in;
 
-    memset((char *)cToken, 0x00, sizeof(char *) * MAX_TOKEN * MAX_TOKEN);
-    memset( state, 0x00, MAX_TOKEN);
+    if( ( cmd_count = tokenize(command, cmdList) ) == 0 )//return token count
+        return 0;
 
-    if( ( cmd_count = tokenize(command, cToken) ) == 0 ) //return token count
-        return -1;
+    in = 0, out = 1, next_in = 0;
+    for(n = 0; n < cmd_count; n++)
+    {
+        if(cmdList[n].tok[0] == NULL)
+        {
+            fprintf(stdout, "syntax error ! \n");
+            continue;
+        }
 
-    for(n = 0; n < cmd_count ; n++){
-        strcpy(file_path, cToken[n][0]); //cToken[0] : filename -> file_path
+        if( specialCommand(cmdList[n].tok) == -1 )
+        {  // setpath.. cd... exit
+            perror("specialCommand: ");
+            return -1;
+        }
 
-        if( specialCommand(cToken[n]) == -1 ) // setpath.. cd... exit
-            exit(-1);
+        if(next_in > 0)
+        {
+            in = next_in;
 
-        if(accessCheck(dir_path, file_path) == 0){ // file exit
-        // child process create
-            if( (pid = fork()) < 0) {
-                perror ("fork() : ");
-                exit(-2);
-            }
-
-            if( pid == 0) {
-                execv(file_path, cToken[n]);
-                perror("execv(): ");
-
-                exit(0);
-            }
-            else if( pid > 0 ) // parent
+            if(cmdList[n-1].type == RD_R)
             {
-                if ( state[n] != BG )
-                    wait((int*)0);
+                pipeTofile(in, cmdList[n].tok[0]);
+
+                if (cmdList[n].type == RD_R)
+                {
+                    pipe(pd);
+                    next_in = pd[0];
+                    out = pd[1];
+
+                    fileTopipe(cmdList[n].tok[0], out);
+                }
+                continue;
             }
         }
         else
-            fprintf(stderr,"command not found\n");
+            in = 0;
+
+        switch(cmdList[n].type) 
+        {
+            case RD_L:
+                continue;
+            case RD_R:
+            case PP :
+                pipe(pd);
+                next_in = pd[0];
+                out = pd[1];
+                break;
+
+            default :
+                out = 1;
+                break;
+        }
+
+        if(cmdList[n-1].type == RD_L)
+        {
+            pipe(rpd);
+            fileTopipe(cmdList[n].tok[0], rpd[1]);
+            execute(&cmdList[n-1], rpd[0], out);
+            continue;
+        }
+        
+#ifdef DEBUG
+        printf("******************************************************\n\n");
+#endif
+        execute(&cmdList[n], in, out);
     }
+
     return 0;
 }//}}} 
 
-int accessCheck(char **dir_path, char *file_path){ //{{{ filename -> file path
+int accessCheck(char *file_path){ //{{{ filename -> file path
     char filename[256];
+    char **dir = dir_path;
 
     strcpy(filename, file_path); // filename copy
 
-    while(*dir_path)
+    while(*dir)
     {
-        strcpy(file_path, *dir_path++);
+        strcpy(file_path, *dir++);
         strcat(file_path, filename);
 
-        if(access(file_path, 0) == 0){ // access return value 0
-#ifdef DEBUG
-            printf("[accessCheck] : %s file exists !! \n", file_path);
-#endif
+        if(access(file_path, 0) == 0) // access return value 0
             return 0;
-        }
     }
-#ifdef DEBUG
-            printf("[accessCheck] : file not found !!\n");
-#endif
-            return -1;
+
+    return -1;
 }//}}}
 
 int setpath(char **path, char **cTok){ // {{{ cToken[0] == setpath 
@@ -174,53 +177,92 @@ int initPath(char **path){//{{{
     return 0;
 }//}}}
 
-int tokenize(char *command, char *cToken[MAX_TOKEN][MAX_TOKEN]){///{{{
-    int t_idx = 0;
-    int com_idx = 0;
-    int delim_flag = 1;
-    int cmd_count = 0;
+int tokenize(char *command, struct COMMAND_ *cmdList){///{{{
+    int t_idx = 0, com_idx =0, delim_flag =1, cmd_count =0, tp_set=0, mark=0;
+
 #ifdef DEBUG
     int i = 0, j;
 #endif
 
-    while ( command[com_idx] && ( t_idx < MAX_TOKEN ) ){
-        if(command[com_idx] == ';'){
-            cToken[cmd_count++][t_idx] = NULL;
+    while( command[com_idx] && ( t_idx < MAX_TOKEN ) ){
+
+        if(command[com_idx] == '\''){
+            if(!mark)
+                command[com_idx] = '\0'; 
+
+            mark= mark ? 0 : 1;
+        }
+
+        if(!mark){
+            switch(command[com_idx]){
+                case '\'':
+                    cmdList[cmd_count].tok[t_idx++] = &command[com_idx-1];
+                    command[com_idx] = '\0';
+                    delim_flag =0;
+                    break;
+
+                case '&':
+                    cmdList[cmd_count].type = BG;
+                    tp_set = 1;
+                    break;
+
+                case '|':
+                    cmdList[cmd_count].type = PP;
+                    tp_set = 1;
+                    break;
+
+                case '>':
+                    cmdList[cmd_count].type =RD_R;
+                    tp_set = 1;
+                    break;
+
+                case '<':
+                    cmdList[cmd_count].type =RD_L;
+                    tp_set =1;
+                    break;
+
+                case ';':
+                    cmdList[cmd_count].type = NL;
+                    tp_set = 1;
+                    break;
+
+                case ' ': 
+                    delim_flag = 1;
+                    command[com_idx] = '\0';
+                    break;
+                    
+                default :
+                    if (delim_flag){
+                        cmdList[cmd_count].tok[t_idx++] = (command + com_idx);
+                        delim_flag = 0;
+                    }
+                    break;
+            }
+        }
+
+        if(tp_set)
+        {
+            cmdList[cmd_count++].tok[t_idx] = NULL;
             t_idx = 0;
             delim_flag = 1;
             command[com_idx] = '\0';
-        }
-        else if(command[com_idx] == '&'){
-            state[cmd_count] = BG;
-            cToken[cmd_count++][t_idx] = NULL;
-            t_idx = 0;
-            delim_flag = 1;
-            command[com_idx] = '\0';
-        }
-        else{
-            if ( ( command[com_idx] != ' ' ) && delim_flag ){
-                cToken[cmd_count][t_idx++] = (command + com_idx);
-                delim_flag = 0;
-            }
-            else if( command[com_idx] == ' '){
-                delim_flag = 1;
-                command[com_idx] = '\0';
-            }
+            tp_set=0;
         }
         com_idx++;
     }
 
-    if( cToken[cmd_count][0] == NULL )
+    while( cmdList[cmd_count].tok[0] == NULL )
         cmd_count--;
 
 #ifdef DEBUG
-    for(j = 0 ; j < cmd_count+1 ; j++){
-        i = 0;
-        while( cToken[j][i] )
-            printf("[tokenize] cToken[%d][%d] : %s \n", j, i, cToken[j][i++]);
+    int k=0;
 
+    for(j = 0 ; j < cmd_count+1 ; i=0, j++){
+        while( cmdList[j].tok[i] ){
+            printf("[tokenize] cmd[%d][%d] : %s \t type : %d ASCII : %d \n", j, i, cmdList[j].tok[i++], cmdList[j].type, *cmdList[j].tok[i]);
+        }
     }
-    printf("cmd_count = %d \n",cmd_count +1);
+    printf("cmd_count = %d \n\n",cmd_count +1);
 #endif 
 
     return cmd_count+1 ;
@@ -233,7 +275,7 @@ int specialCommand(char **cTok){///{{{
         }
 
         else if(!strcmp("exit",*cTok))
-            return -1;
+            exit(-1);
 
         else if(!strcmp("cd",*cTok)){
             if( chdir(*(cTok + 1)) == -1)
@@ -241,3 +283,96 @@ int specialCommand(char **cTok){///{{{
             return 0;
         }
 }///}}}
+
+int execute(const struct COMMAND_ *cmd, int in, int out)///{{{
+{
+    int pid, status, n=1;
+    char file_path[MAX_PATH];
+
+    strcpy(file_path, cmd->tok[0]); //cToken[0] : filename -> file_path
+
+    if( accessCheck(file_path) != 0)
+    {
+        fprintf(stdout, "not found! \n");
+        return -1;
+    }
+
+    // execute
+    if(( pid = fork())==0)
+    {
+        if(in != 0)
+        {
+            close(0);
+            dup(in);
+            close(in);
+        }
+
+        if(out != 1)
+        {
+            close(1);
+            dup(out);
+            close(out);
+        }
+
+        execv(file_path, cmd->tok);
+        perror("execv : ");
+        exit(127);
+    }
+    else
+    {
+        if( in != 0)
+            close(in);
+
+        if( out != 1)
+            close(out);
+
+        if( cmd->type != BG)
+        {
+            while(pid != waitpid(-1, &status, 0))
+            {
+                fprintf(stderr,"[complete] +%d\n",n++);
+            }
+        }
+        else // background
+            fprintf(stderr, "[%d] %d\n", n, pid);
+    }
+    return 0;
+}
+///}}}
+
+int pipeTofile(int pd, const char *fn)
+{
+    int fd;
+    char buf;
+
+    if((fd =open(fn, O_CREAT|O_WRONLY, 0666))==-1) {
+        perror("open : ");
+        return -1;
+    }
+
+    while(read(pd, &buf, 1) > 0)
+        write(fd, &buf, 1);
+
+    close(pd); close(fd);
+
+    return 0;
+}
+
+int fileTopipe(const char *fn, int pd)
+{
+    int fd;
+    char buf;
+
+    if((fd =open(fn, O_RDONLY))==-1) {
+        perror("open : ");
+        return -1;
+
+    }
+
+    while(read(fd, &buf, 1) > 0)
+        write(pd, &buf, 1);
+
+    close(fd); close(pd);
+
+    return 0;
+}

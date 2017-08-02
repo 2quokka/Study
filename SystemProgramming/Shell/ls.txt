@@ -1,0 +1,11 @@
+합계 68
+-rw-rw-r-- 1 hkedo hkedo  6798  7월 17 23:49 \
+drwxrwxr-x 2 hkedo hkedo  4096  8월  1 16:34 .
+drwxrwxr-x 9 hkedo hkedo  4096  7월 14 15:24 ..
+-rwxrwxr-x 1 hkedo hkedo  8608  8월  1 16:34 a.out
+-rw-rw-r-- 1 hkedo hkedo   149  8월  1 16:34 cuttest.c
+-rw-rw-r-- 1 hkedo hkedo     0  8월  1 16:34 ls.txt
+-rwxrwxr-x 1 hkedo hkedo 18448  7월 17 23:57 myShell
+-rw-rw-r-- 1 hkedo hkedo  7937  8월  1 16:28 myShell.c
+-rw-rw-r-- 1 hkedo hkedo   932  7월 27 19:43 myShell.h
+-rw-rw-r-- 1 hkedo hkedo   964  7월 21 16:49 pipetest.c
