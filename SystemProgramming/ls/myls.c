@@ -81,9 +81,18 @@ const char* get_gname(gid_t g)
 
 void mtime_print(time_t mt)
 {
-    struct tm *t = localtime(&mt);
+    struct tm *t;
+    time_t timer = time(NULL);
+    int year = localtime(&timer)->tm_year;
 
-    printf("%3d%3d%3d:%02d ", t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min);
+    t=localtime(&mt);
+
+    printf("%3d", t->tm_mon+1);
+    printf("%3d", t->tm_mday);
+    if(year != t->tm_year)
+        printf("%6d ", t->tm_year + 1900);
+    else
+        printf(" %02d:%02d ", t->tm_hour, t->tm_min);
 }
 
 int make_opt(int argc, char **argv)
@@ -205,11 +214,13 @@ int f_run(int opt, char **list, int n)
     while ( (i>=0) && (i<n) )
     {
         memset(&buf, 0, sizeof(struct stat));
+        lstat(list[i], &buf);
 
-        if( OP_CK(opt, OP_l))
+        if(OP_CK(opt, OP_s))
+            printf("%2ld ", BLK_CNT(buf.st_blocks));
+
+        if(OP_CK(opt, OP_l))
         {
-            lstat(list[i], &buf);
-
             perm_print(buf.st_mode); //permission
             printf("%4ld ", buf.st_nlink); //link 
             printf("%-8s", get_uname(buf.st_uid)); //owner name
@@ -242,14 +253,30 @@ int d_run(int opt, char **list, int n)
     struct dirent **dent;
     struct stat buf;
     int ent_n, i, j;
+    unsigned long total;
     char p_buf[MAX], ln_buf[MAX];
 
     for(i=0; i<n; i++)
     {
-        if(P_COUNT>0)
+        if(P_COUNT>1)
             printf("\n%s:\n",list[i]);
 
         ent_n = scandir(list[i], &dent, NULL, alphasort);
+        
+        if(OP_CK(opt, OP_l) || OP_CK(opt, OP_s))
+        {
+            for(total =0,j=0;j<ent_n;j++)
+            {
+                sprintf(p_buf, "%s/%s", list[i], dent[j]->d_name);
+                lstat(p_buf, &buf);
+                
+                if( (!OP_CK(opt, OP_a)) && (*(dent[j]->d_name) == '.') )
+                    continue;
+                    
+                total += BLK_CNT(buf.st_blocks);
+            }
+            printf("total %ld\n", total);
+        }
 
         if(OP_CK(opt, OP_r)) // reverse
             j = ent_n-1;
@@ -272,11 +299,13 @@ int d_run(int opt, char **list, int n)
             }
 
             sprintf(p_buf, "%s/%s", list[i], dent[j]->d_name);
+            lstat(p_buf, &buf);
+
+            if(OP_CK(opt, OP_s))
+                printf("%2ld ", BLK_CNT(buf.st_blocks));
             
             if( OP_CK(opt, OP_l))
             {
-                lstat(p_buf, &buf);
-
                 perm_print(buf.st_mode); //permission
                 printf("%4ld ", buf.st_nlink); //link 
                 printf("%-8s", get_uname(buf.st_uid)); //owner name
