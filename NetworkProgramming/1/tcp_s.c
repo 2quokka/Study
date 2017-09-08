@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    serv_sock=socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    serv_sock=socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if(serv_sock == -1)
         error_handling("socket() error");
 

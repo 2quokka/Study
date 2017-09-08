@@ -9,10 +9,10 @@ void error_handling(char *message);
 
 int main(int argc, char *argv[])
 {
-    int serv_sock;
-    int clnt_sock;
+    int serv_sock; // server socket descriptor
+    int clnt_sock; // client socket descriptor
 
-    struct sockaddr_in serv_addr;
+    struct sockaddr_in serv_addr; // it is sockaddr for bind
     struct sockaddr_in clnt_addr;
     socklen_t clnt_addr_size;
 
@@ -24,13 +24,13 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    serv_sock=socket(PF_INET, SOCK_STREAM, 0);
-    if(serv_sock == -1)
+    serv_sock=socket(PF_INET, SOCK_STREAM, 0); // return socket discriptor  PF_INET = v4, SOCK_STREAM = connected socket
+    if(serv_sock == -1) // if socket-call be failed, return error code
         error_handling("socket() error");
 
     memset(&serv_addr, 0, sizeof(serv_addr));
-    serv_addr.sin_family=AF_INET;
-    serv_addr.sin_addr.s_addr=htonl(INADDR_ANY);
+    serv_addr.sin_family=AF_INET;  // Address Family
+    serv_addr.sin_addr.s_addr=htonl(INADDR_ANY); //host to network long INADDR_ANY is my ip
     serv_addr.sin_port=htons(atoi(argv[1]));
 
     if(bind(serv_sock, (struct sockaddr*)& serv_addr, sizeof(serv_addr))==-1)
