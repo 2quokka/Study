@@ -1,5 +1,5 @@
 #include "myShell.h"
-#define DEBUG
+//#define DEBUG
 
 int main(int argc, char **argv){
     char command[COMMAND_BUFFER];
